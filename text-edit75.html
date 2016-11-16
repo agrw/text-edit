@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>text-edit</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAAmJLR0QA/4ePzL8AAAAJcEhZcwAADsMAAA7DAcdvqGQAAADUSURBVCjPhZE9S4JxFEfPE60u/61J6AsIpiREk+Lc2ug3aE5ocOt7JCI0OTs06CAmShQUhm4JzxjoehoU8xFfzp0uHLj3/i4AsR+yhxMYes2QA8KcLzgkHKEmImb8FGBkxWCw4sgdQsOw6jHty1LpiE8CTL2ybF+AvmVL/ni6Oa5LTJNsBJCPet7wTkKYMCYLq0wugcmxK+Jt4YIxRP/1ECWEcwa87Q7qF4AcGe5pCTCzasq2wKtnYsFvoW5qnQPeuVgu/GjaYE+AgbcGsejz3g8n+APqoHGJhhW6QAAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAxNi0wNy0xM1QxNjo0ODoxNyswMjowMNE4CvMAAAAldEVYdGRhdGU6bW9kaWZ5ADIwMTYtMDctMTNUMTY6NDg6MTcrMDI6MDCgZbJPAAAAAElFTkSuQmCC">
+
+<style>
+
+* {
+    margin:0;
+    padding:0;
+}
+
+textarea {
+        position: absolute;
+        top: 30px;
+        bottom: 0;
+        left: 2px;
+        right: 0;
+        width:99%;border: 0px;
+        resize: none;
+        }
+textarea:focus { outline: none; }
+
+
+input {
+    border: none; font-size:18px;
+    background: transparent;
+}
+
+
+.image-overload > input
+{
+    display: none;
+    border: 0px;
+}
+
+.image-overload img
+{
+    width: 24px;
+    cursor: pointer;
+    padding: 0px;
+    border: 0px;
+}
+
+.image-overload img:hover { cursor: pointer; opacity: 0.3; filter: alpha(opacity=30);  width: 24px;  }
+
+</style>
+
+<script type="text/javascript">
+
+var helpText =
+"\n"+
+" text-edit v0.0.75\n"+
+"\n"+
+" This is a simple text editor in a browser. \n"+
+"\n"+
+" You can \n"+
+"        create a new file, \n"+
+"        open a file, \n"+
+"        save a file,\n"+
+"        edit a file,\n"+
+"        show this help and \n"+
+"        drag & drop a file to edit.\n"+
+"\n"+
+" The tab size is set in url using 'tab='.\n"+
+"\n"+
+" All other functionality is provided by browser.\n"+
+"\n"+
+" Click on help icon again to return to editing.\n"+
+"\n"+
+" Enjoy, AGRW";
+
+var currentText="";
+
+
+// Check for the various File API support.
+if (window.File && window.FileReader && window.FileList && window.Blob)
+    {
+    // Great success! All the File APIs are supported.
+    }
+else
+    {
+      alert('The File APIs are not fully supported in this browser.');
+    }
+
+
+function getUrlVars()
+{
+var vars = {};
+var parts = window.location.href.replace(/[?&]+([^=&]+)=([^&]*)/gi, function(m,key,value) {
+vars[key] = unescape(value);
+});
+return vars;
+}
+
+function SetValuesInUrl(tabValue,editValue)
+{
+var urlEdit = getUrlVars()['edit'];
+var urlTab = getUrlVars()['tab'];
+if (( urlEdit == null || urlEdit != editValue ) ||
+  ( urlTab == null || urlTab != tabValue ))
+    {
+    var newURL = location.protocol + '//' + location.host + location.pathname +"?edit="+editValue+"&tab="+tabValue;
+    location.assign(newURL);
+    }
+}
+
+var textChanged=false;
+var enableLogging=false;
+
+function DebugLog(string)
+{
+if (enableLogging) console.log(string);
+}
+
+
+function saveTextAsFile()
+{
+    var textToSave = document.getElementById("EditText").value;
+    var textToSaveAsBlob = new Blob([textToSave], {type:"text/plain"});
+    textChanged=true;SaveText(); // force save to local buffer before save
+    var fileNameToSaveAs = document.getElementById("SaveAs").value;
+
+    if (navigator.msSaveBlob)
+        { // IE10+ : (has Blob, but not a[download] or URL)
+         return navigator.msSaveBlob(textToSaveAsBlob , fileNameToSaveAs );
+        }
+    else
+        {
+        var textToSaveAsURL = window.URL.createObjectURL(textToSaveAsBlob);
+        var downloadLink = document.createElement("a");
+        downloadLink.download = fileNameToSaveAs;
+        downloadLink.innerHTML = "Download File";
+        downloadLink.href = textToSaveAsURL;
+        downloadLink.onclick = destroyClickedElement;
+        downloadLink.style.display = "none";
+        document.body.appendChild(downloadLink);
+
+        downloadLink.click();
+    }
+
+}
+
+
+function destroyClickedElement(event)
+{
+    document.body.removeChild(event.target);
+}
+
+
+function SetElementValueFromItemValue(elementName, itemName)
+{
+var Element = document.getElementById(elementName);
+var Item = document.getElementById(itemName);
+if ( localStorage.getItem(Item.value) != null)
+    {
+    Element.value = localStorage.getItem(Item.value);
+    }
+DebugLog("getItem( "+Item.value+" )= "+Element.value);
+}
+
+
+function GetText()
+{
+SetElementValueFromItemValue("EditText","SaveAs");
+textChanged=true;
+var tabValue = getUrlVars()['tab'];
+if (tabValue == null ) tabValue = 8;
+
+SetValuesInUrl(tabValue, document.getElementById("SaveAs").value);
+
+}
+
+
+
+function SaveText()
+{
+
+if (textChanged)
+    {
+    var SaveAsValue= document.getElementById("SaveAs").value;
+    var EditText= document.getElementById("EditText");
+
+    try
+        {
+        localStorage.setItem( SaveAsValue, EditText.value );
+        }
+    catch (e)
+        {
+         // if (e == QUOTA_EXCEEDED_ERR)  QuotaExceededError
+         if (e == QuotaExceededError) // IE error message?? ***FIXME***
+            {
+            alert(e+'Quota exceeded!'); //data wasn't successfully saved due to quota exceed so throw an error
+            }
+        }
+
+    DebugLog("setItem( "+SaveAsValue+", "+EditText.value+ " )");
+    textChanged=false;
+    }
+
+}
+
+function newText()
+{
+    // clear edit name and value
+    document.getElementById("EditText").value = "";
+    document.getElementById("SaveAs").value="text-edit v0.0.75";
+    // setup new text buffer
+    textChanged=true;
+    SaveText();
+    GetText();
+}
+
+
+
+function loadFileAsText()
+{
+    var fileToLoad = document.getElementById("files").files[0];
+    var filename= (document.getElementById("files").value).split('\\').pop().split('/').pop();
+
+    document.getElementById("SaveAs").value =filename;
+
+    var fileReader = new FileReader();
+    fileReader.onload = function(fileLoadedEvent)
+    {
+        var textFromFileLoaded = fileLoadedEvent.target.result;
+        document.getElementById("EditText").value = textFromFileLoaded;
+        localStorage.setItem(filename, textFromFileLoaded);
+        var tabValue = getUrlVars()['tab'];
+        if (tabValue == null) tabValue=8;
+        SetValuesInUrl( tabValue , document.getElementById("SaveAs").value);
+        document.title=document.getElementById("SaveAs").value;
+    };
+    fileReader.readAsText(fileToLoad, "UTF-8");
+
+}
+
+
+//Set your tab size here, and in the CSS.
+function ChangeTabSize(value)
+{
+var textarea = document.getElementById("EditText");
+textarea.style.tabSize=value;
+textarea.style.MozTabSize =value;
+textarea.style.OTabSize =value;
+
+SetValuesInUrl(value, document.getElementById("SaveAs").value);
+}
+
+
+function Help()
+{
+var filenameElement=document.getElementById("SaveAs");
+if (filenameElement.value == "help")
+    {
+    filenameElement.value=getUrlVars()['edit'];
+    document.getElementById("EditText").readOnly = false;
+    document.getElementById("EditText").value = currentText;
+    }
+else
+    {
+    filenameElement.value = "help";
+    document.getElementById("EditText").readOnly = true;
+    currentText = document.getElementById("EditText").value;
+    document.getElementById("EditText").value = helpText;
+    }
+
+}
+
+function SetTab() 
+{
+    var tabURLValue = getUrlVars()['tab'];
+    if (tabURLValue == null)
+        tabURLValue = 8;
+
+    var tabValue = prompt("Set Tab", tabURLValue );
+
+    if (tabValue != null)
+    {
+        ChangeTabSize(tabValue);
+    }
+}
+
+
+</script>
+
+</head>
+
+<body>
+
+<div style="vertical-align: text-top; cursor: pointer; height: 24px;">
+
+&nbsp;
+
+
+<!--- New File ▯  -->
+<span title="New" onclick="newText()" class="image-overload"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAABiSURBVEhLY/wPBAw0BExQmmZgBFrw+/dvMP3z5084Gx/AGcmMjIxQFn4A0g5SiyutUC2IcDmIqnGAzRKqRzK6JVSJA3yAYguwAWQjB18+IBWMWkAQjFpAEIxaQBAMdQsYGAAfaiTzWBgUkQAAAABJRU5ErkJggg==" alt="New"> </span>
+
+
+<!--- Open File 📂 --->
+<span class="image-overload">
+    <label for="files" alt="Open1">
+        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAAB2SURBVEhL7ZNBDoAgDARb//9ndQmYGpEidm+dCyGBHQpF9xMhstWRRgpcUuBS/oGq1mmfP19lqgLvACOmKviKrZjyBvbA2aYulDZFXtvjCrBwpcuaYHhFq+GWV0FEOOgKosLBQxAZDm6C6HBwCRjhoAhY4SIiB67pOx7nCaKEAAAAAElFTkSuQmCC" title="Open">
+    </label>
+    <input id="files" onchange="loadFileAsText()" type="file" alt="Open3">
+</span>
+
+
+<!--- Save File 💾  -->
+<span title="Save" onclick="saveTextAsFile()" class="image-overload"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsQAAA7EAZUrDhsAAACdSURBVEhL7ZPdCoAgDIVnEhH0/i/ZVZf9QDlSnKJOLOnCPjiUsXWUM8WpgIp0+lmN34DFCVkIod8sOTNg+kK1r54gtMEiA/yRkY//rYkp2lV62y0NhmnEwU5RCdS4iQyeEc3gXBeAgw8RpAQYJreXZBA3IEU5FBnQdQzT/tkJkiFjE6fZ3r8gSQPcCaex18UKXPt8F/ITqEHliwZwAThBgOefkonQAAAAAElFTkSuQmCC" alt="Save"> </span>
+
+
+<!--- Help ? -->
+<span title="Help" onclick="Help();" class="image-overload"> <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAOxAAADsQBlSsOGwAAAJFJREFUSEtj/A8EDDQETFCaZmDoW8AIxFSLA2zRORoHBAFeCwQVvMHhCsPkALyRjM1QRkaQFuyApEiGKQYZCMMgQKpPSI6D51CaWEBSPkD2FTZAUhChA5DmN0AaXxxgA4Qt4HOGu0yURMNBgLAFv19CGeQBkuKAECA7DkAasWkmBpCcTEkFgyOIKAGjFhAADAwAJC09n5lOacMAAAAASUVORK5CYII=" alt="Help"></span>
+
+ 
+<!--- name of file/buffer being edited -->
+<input title="text-edit v0.0.75" value="text-edit v0.0.75" id="SaveAs" onchange="GetText();" readonly="">
+
+<hr>
+</div>
+
+<textarea id="EditText" onkeydown="textChanged=true;if(event.keyCode===9 &amp;&amp; !event.shiftKey ){var v=this.value,s=this.selectionStart,e=this.selectionEnd;this.value=v.substring(0, s)+&#39;\t&#39;+v.substring(e);this.selectionStart=this.selectionEnd=s+1;return false;}" style="tab-size: 8;"> </textarea>
+
+<script type="text/javascript">
+
+
+var FilenameElement = document.getElementById("SaveAs");
+var EditTextElement = document.getElementById("EditText");
+
+var myEdit = getUrlVars()['edit'];
+if (myEdit != null)
+{
+    FilenameElement.value =  myEdit;
+    GetText();
+}
+
+var tabValue = getUrlVars()['tab'];
+if (tabValue == null ) tabValue = 8;
+ChangeTabSize(tabValue);
+oldname=myEdit;
+
+window.setInterval(SaveText, 400);
+
+document.title = FilenameElement.value =="" ? document.title : "text-edit" ;
+
+// get & store help text local storage
+function httpGet(theUrl)
+{
+    if (window.XMLHttpRequest)
+    {// code for IE7+, Firefox, Chrome, Opera, Safari
+        xmlhttp=new XMLHttpRequest();
+    }
+    else
+    {// code for IE6, IE5
+        xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+    }
+    xmlhttp.onreadystatechange=function()
+    {
+        if (xmlhttp.readyState==4 && xmlhttp.status==200)
+        {
+            localStorage.setItem( "help.txt", xmlhttp.responseText );
+        }
+    }
+    xmlhttp.open("GET", theUrl, false );
+    xmlhttp.send();
+}
+
+
+
+/**
+ * Text area
+ * @type {HTMLElement}
+ */
+var dropZone = document.getElementById('EditText');
+
+/**
+ * Set event listeners
+ */
+dropZone.addEventListener('dragover', dragOver);
+dropZone.addEventListener('dragend', dragEnd);
+dropZone.addEventListener('drop', readText, false);
+
+function dragOver(e) {
+    e.stopPropagation(); // for some browsers stop redirecting
+    e.preventDefault();
+    return false;
+}
+
+function dragEnd(e) {
+    e.stopPropagation(); // for some browsers stop redirecting
+    e.preventDefault();
+    return false;
+}
+
+function readText(e) {
+    e.stopPropagation(); // for some browsers stop redirecting
+    e.preventDefault();
+
+    var file,
+        fileData,
+        fileReader,
+        files = e.dataTransfer.files;
+
+    if (!files) {
+        return;
+    }
+
+    //not append
+    dropZone.value = '';
+
+    for(var i=0;i<files.length && i < 1;i++)
+    {
+        file = files[i];
+
+        FilenameElement.value = file.name;
+
+        //new instance for each file
+        fileReader = new FileReader();
+        fileReader.textArea = dropZone;
+
+        fileData = function (event) {
+            this.textArea.value += this.result;
+            textChanged=true;
+            SaveText();
+            SetValuesInUrl( getUrlVars()['tab'] , document.getElementById("SaveAs").value);
+        };
+
+        fileReader.addEventListener('loadend',fileData);
+        fileReader.readAsText(file);
+    }
+
+//     SetValuesInUrl( getUrlVars()['tab'] , document.getElementById("SaveAs").value);
+}
+
+</script>
+
+
+
+</body></html>
