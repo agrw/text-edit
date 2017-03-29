@@ -110,7 +110,7 @@
             if ((urlEdit == null || urlEdit != editValue) ||
                 (urlTab == null || urlTab != tabValue))
             {
-                var newURL = location.protocol + '//' + location.host + location.pathname + "?edit=" + editValue + "&tab=" + tabValue;
+                var newURL = location.protocol + '//' + location.host + location.pathname + "#parameters?edit=" + editValue + "&tab=" + tabValue;
                 location.assign(newURL);
             }
         }
@@ -290,7 +290,7 @@
         &nbsp; 
 
         <!--- buffer being edited -->
-        <input title="buffer being edited" value="text-edit v0.0.80" id="SaveAs" onchange="GetText();" readonly="">
+        <input title="buffer being edited" value="text-edit v0.0.81" id="SaveAs" onchange="GetText();" readonly="">
 
         <hr style="height:1px;width98%">
   
@@ -387,7 +387,7 @@
 	var reader = new FileReader();
 	reader.onload = function(e) {
                         localStorage.setItem(file.name, e.target.result);
-			var win = window.open(location.protocol + '//' + location.host + location.pathname + "?edit=" + file.name + "&tab=8" , file.name);
+			var win = window.open(location.protocol + '//' + location.host + location.pathname + "#parameters?edit=" + file.name + "&tab=8" , file.name);
 	                }
 	reader.readAsText(file);
 
